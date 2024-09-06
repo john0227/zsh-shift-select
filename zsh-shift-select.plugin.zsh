@@ -31,6 +31,78 @@ function shift-select::kill-region() {
 }
 zle -N shift-select::kill-region
 
+################################
+# Start of My custom functions
+################################
+
+function shift-select::delete-and-input() {
+	zle kill-region -w
+	zle -K main
+	zle -U "$KEYS"
+}
+zle -N shift-select::delete-and-input
+
+function shift-select::set-cursor-to-beginning-of-region() {
+	local cursor=$CURSOR
+	if [[ $CURSOR -gt $MARK ]]; then
+		cursor=$MARK
+	fi
+
+	zle deactivate-region -w
+	zle -K main
+	CURSOR=$cursor
+}
+zle -N shift-select::set-cursor-to-beginning-of-region
+
+function shift-select::set-cursor-to-end-of-region() {
+	local cursor=$MARK
+	if [[ $CURSOR -gt $MARK ]]; then
+		cursor=$CURSOR
+	fi
+
+	zle deactivate-region -w
+	zle -K main
+	CURSOR=$cursor
+}
+zle -N shift-select::set-cursor-to-end-of-region
+
+function shift-select::copy-to-clipboard() {
+	# Copy region to clipboard (and killring)
+	zle copy-region-as-kill -w
+	zle copy-region-as-kill -w
+	local text=$killring[1]
+	echo -n "$text" | pbcopy
+}
+zle -N shift-select::copy-to-clipboard
+
+function shift-select::cut-to-clipboard() {
+	# Copy region to clipboard (and killring)
+	zle copy-region-as-kill -w
+	zle copy-region-as-kill -w
+	local text=$killring[1]
+	echo -n "$text" | pbcopy
+
+	# Delete the selected region
+	zle kill-region -w
+	zle -K main
+}
+zle -N shift-select::cut-to-clipboard
+
+function shift-select::delete-and-paste() {
+	# Bring content of clipboard
+	clipboard=$(pbpaste)
+	
+	# Replace selected region with clipboard content
+	zle kill-region -w
+	zle -K main
+	zle -U "$clipboard"
+}
+zle -N shift-select::delete-and-paste
+
+################################
+# End of My custom functions
+################################
+
 # Deactivate the selection region, switch back to the main keymap and process
 # the typed keys again.
 function shift-select::deselect-and-input() {
@@ -73,13 +145,15 @@ function {
 		kri    '^[[1;2A'    x          up-line              # Shift + UpArrow
 		kind   '^[[1;2B'    x          down-line            # Shift + DownArrow
 		kHOM   '^[[1;2H'    x          beginning-of-line    # Shift + Home
-		x      '^[[97;6u'   x          beginning-of-line    # Shift + Ctrl + A
+		x      '^[[97;6u'   '^[a'      beginning-of-line    # Ctrl/Option + A
+		x      '^[[97;6u'   '^[A'      beginning-of-line    # Shift + Ctrl/Option + A
 		kEND   '^[[1;2F'    x          end-of-line          # Shift + End
-		x      '^[[101;6u'  x          end-of-line          # Shift + Ctrl + E
-		x      '^[[1;6D'    '^[[1;4D'  backward-word        # Shift + Ctrl/Option + LeftArrow
-		x      '^[[1;6C'    '^[[1;4C'  forward-word         # Shift + Ctrl/Option + RightArrow
-		x      '^[[1;6H'    '^[[1;4H'  beginning-of-buffer  # Shift + Ctrl/Option + Home
-		x      '^[[1;6F'    '^[[1;4F'  end-of-buffer        # Shift + Ctrl/Option + End
+		x      '^[[101;6u'  '^[e'      end-of-line          # Ctrl/Option + E
+		x      '^[[101;6u'  '^[E'      end-of-line          # Shift + Ctrl/Option + E
+		x      '^[[1;6D'    '^[^[[D'   backward-word        # Shift + Ctrl/Option + LeftArrow
+		x      '^[[1;6C'    '^[^[[C'   forward-word         # Shift + Ctrl/Option + RightArrow
+		x      '^[[1;6H'    '^[^[[H'   beginning-of-buffer  # Shift + Ctrl/Option + Home
+		x      '^[[1;6F'    '^[^[[F'   end-of-buffer        # Shift + Ctrl/Option + End
 	); do
 		# Use alternative sequence (Option instead of Ctrl) on macOS, if defined.
 		[[ "$OSTYPE" = darwin* && "$seq_mac" != x ]] && seq=$seq_mac
@@ -88,6 +162,29 @@ function {
 		bindkey -M emacs ${terminfo[$kcap]:-$seq} shift-select::$widget
 		bindkey -M shift-select ${terminfo[$kcap]:-$seq} shift-select::$widget
 	done
+	
+	#################################
+	# Start of My custom keybindings
+	#################################
+
+	# left arrow - set cursor to start of selected region
+	bindkey -M shift-select '^[[D' shift-select::set-cursor-to-beginning-of-region
+	# right arrow - set cursor to end of selected region
+	bindkey -M shift-select '^[[C' shift-select::set-cursor-to-end-of-region
+	# alphabet, numbers, space - replaces selected region with inputted key
+	bindkey -M shift-select -R 'a'-'z' shift-select::delete-and-input
+	bindkey -M shift-select -R '0'-'9' shift-select::delete-and-input
+	bindkey -M shift-select ' ' shift-select::delete-and-input
+	# Ctrl/Option + y - copy selected region to clipboard
+	bindkey -M shift-select '^[y' shift-select::copy-to-clipboard
+	# Ctrl/Option + d - cut selected region to clipboard
+	bindkey -M shift-select '^[d' shift-select::cut-to-clipboard
+	# Ctrl/Option + p - replace selected region with clipboard content (i.e., paste)
+	bindkey -M shift-select '^[p' shift-select::delete-and-paste
+
+	#################################
+	# End of My custom keybindings
+	#################################
 
 	# Bind keys in the shift-select keymap.
 	for	kcap   seq        widget (                          # key name
